@@ -1,6 +1,6 @@
 val _version = "0.5.0-SNAPSHOT"
 val _json4sVersion = "3.3.0"
-val _playVersion = "2.4.0"
+val _playVersion = "2.5.0"
 
 val json4sCore = "org.json4s" %% "json4s-core" % _json4sVersion
 val json4sNative = "org.json4s" %% "json4s-native" % _json4sVersion
@@ -13,7 +13,7 @@ val playWS = "com.typesafe.play" %% "play-ws" % _playVersion % "test"
 
 val playDependencies = Seq(playApi % "provided", playTest % "test")
 
-val unfilteredVersion = "0.8.0"
+val unfilteredVersion = "0.8.4"
 val unfilteredFilter = "net.databinder" %% "unfiltered-filter" % unfilteredVersion
 val unfilteredJetty =  "net.databinder" %% "unfiltered-jetty" % unfilteredVersion
 val unfilteredDependencies = Seq(unfilteredFilter, unfilteredJetty)
@@ -29,8 +29,7 @@ val publishingSettings = Seq(
 val baseSettings = Seq(
   organization := "com.github.tototoshi",
   version := _version,
-  scalaVersion := "2.11.4",
-  crossScalaVersions := scalaVersion.value :: "2.10.4" :: Nil,
+  scalaVersion := "2.11.7",
   scalacOptions ++= Seq("-feature", "-deprecation"),
   resolvers += "typesafe" at "http://repo.typesafe.com/typesafe/releases"
 )
