@@ -16,7 +16,11 @@
 
 package com.github.tototoshi.play2.json4s.jackson
 
+import akka.actor.ActorSystem
+import akka.stream.ActorMaterializer
 import play.api._
+import play.api.inject.guice.GuiceApplicationBuilder
+import play.api.libs.ws.ahc.AhcWSClient
 import play.api.mvc._
 import play.api.test._
 import play.api.test.Helpers._
@@ -24,10 +28,11 @@ import play.api.test.Helpers._
 import org.json4s._
 import org.json4s.jackson.JsonMethods._
 import com.github.tototoshi.play2.json4s.test.jackson.Helpers._
-import com.github.tototoshi.play2.json4s.test.MockServer
 
-import org.scalatest.FunSpec
-import org.scalatest.matchers._
+import org.scalatest.{BeforeAndAfter, FunSpec, ShouldMatchers}
+
+import scala.concurrent.Await
+import scala.concurrent.duration._
 
 
 case class Person(id: Long, name: String, age: Int)
@@ -50,11 +55,22 @@ class TestApplication(json4s: Json4s) extends Controller {
 
 
 
-class PlayModuleSpec extends FunSpec with ShouldMatchers with MockServer {
+class PlayModuleSpec extends FunSpec with ShouldMatchers with BeforeAndAfter {
 
   val configuration = Configuration.empty
 
   val json4s = new Json4s(configuration)
+
+  var system: ActorSystem = _
+
+  before {
+    system = ActorSystem()
+  }
+
+  after {
+    system.terminate()
+  }
+
   import json4s._
 
   describe ("Json4sPlayModule") {
@@ -79,33 +95,32 @@ class PlayModuleSpec extends FunSpec with ShouldMatchers with MockServer {
     describe ("With WS") {
 
       it ("should enable you to use json4s objects as request body") {
-        import unfiltered.filter._
-        import unfiltered.request._
-        import unfiltered.response._
-        import play.api.libs.ws.WS
-        import scala.concurrent._
-        import scala.concurrent.duration._
         import scala.language.postfixOps
-        import org.apache.commons.io.IOUtils
 
         implicit val formats = DefaultFormats
+        implicit val context = play.api.libs.concurrent.Execution.Implicits.defaultContext
+        implicit val materializer = ActorMaterializer()(system)
 
-        val plan = Planify {
-          case request @ Path("/foo") => {
-            val in = request.inputStream
-            try {
-              ResponseString(IOUtils.toString(in))
-            } finally {
-              IOUtils.closeQuietly(in)
-            }
+        def withSimpleServer[T](block: => T): T = withServer {
+          case (method, path) => Action(json4s.json) { request =>
+            val person = request.body.extract[Person]
+            play.api.mvc.Results.Ok(Extraction.decompose(person))
           }
+        }(block)
+
+        def withServer[T](routes: (String, String) => Handler)(block: => T): T = {
+          val app = GuiceApplicationBuilder().routes({
+            case (method, path) => routes(method, path)
+          }).build()
+          running(TestServer(testServerPort, app))(block)
         }
-        withMockServer(plan) { port =>
-          implicit val app = play.api.test.FakeApplication()
+
+        withSimpleServer {
+          val wSClient = AhcWSClient()
           val res = Await.result(
-            WS.url("http://localhost:" + port + "/foo")
-              .post(Extraction.decompose(Person(1, "ぱみゅぱみゅ", 20))),
-            5 seconds
+            wSClient.url("http://localhost:" + testServerPort )
+                .post(Extraction.decompose(Person(1, "ぱみゅぱみゅ", 20))),
+            5.seconds
           )
           res.body should be ("""{"id":1,"name":"ぱみゅぱみゅ","age":20}""")
         }
